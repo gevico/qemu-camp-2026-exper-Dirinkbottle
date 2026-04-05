@@ -55,12 +55,6 @@ cargo install bindgen-cli
 make -f Makefile.camp configure
 ```
 
-This runs `./configure` with unified flags for all experiments:
-- `--target-list=riscv64-softmmu,riscv64-linux-user`
-- `--extra-cflags='-O0 -g3'`
-- `--cross-prefix-riscv64=riscv64-unknown-elf-`
-- `--enable-rust`
-
 ### 3. Build
 
 ```bash
@@ -130,6 +124,8 @@ Implement I2C bus, GPIO I2C controller, and SPI controller in Rust for the G233 
 - Run: `make -f Makefile.camp test-rust`
 - Docs: [Experiment Manual](https://qemu.gevico.online/exercise/2026/stage1/rust/rust-exper-manual/) | [Rust Programming Guide](https://qemu.gevico.online/exercise/2026/stage1/rust/rust-lang-manual/)
 
+
+- Docs: [Experiment Manual](https://qemu.gevico.online/exercise/2026/stage1/rust/rust-exper-manual/) | [Rust Programming Guide](https://qemu.gevico.online/exercise/2026/stage1/rust/rust-lang-manual/)
 
 ## Available Make Targets
 
