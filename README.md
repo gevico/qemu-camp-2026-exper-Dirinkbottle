@@ -125,6 +125,11 @@ Implement I2C bus, GPIO I2C controller, and SPI controller in Rust for the G233 
 - Docs: [Experiment Manual](https://qemu.gevico.online/exercise/2026/stage1/rust/rust-exper-manual/) | [Rust Programming Guide](https://qemu.gevico.online/exercise/2026/stage1/rust/rust-lang-manual/)
 
 
+- I2C bus: `rust/hw/i2c/src/lib.rs` (3 unit tests)
+- GPIO I2C controller: base `0x10013000`, connected AT24C02 EEPROM (addr `0x50`)
+- SPI controller: base `0x10019000`, connected AT25 EEPROM
+- Tests: `tests/gevico/qtest/test-i2c-*.c`, `tests/gevico/qtest/test-spi-rust-*.c`
+- Run: `make -f Makefile.camp test-rust`
 - Docs: [Experiment Manual](https://qemu.gevico.online/exercise/2026/stage1/rust/rust-exper-manual/) | [Rust Programming Guide](https://qemu.gevico.online/exercise/2026/stage1/rust/rust-lang-manual/)
 
 ## Available Make Targets
