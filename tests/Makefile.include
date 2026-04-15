@@ -9,6 +9,7 @@ check-help:
 	@echo "Individual test suites:"
 	@echo " $(MAKE) check-qtest-TARGET            Run qtest tests for given target"
 	@echo " $(MAKE) check-qtest                   Run qtest tests"
+	@echo " $(MAKE) check-inktest                 Run inktest teaching/spec tests"
 	@echo " $(MAKE) check-functional              Run python-based functional tests"
 	@echo " $(MAKE) check-functional-TARGET       Run functional tests for a given target"
 	@echo " $(MAKE) check-unit                    Run qobject tests"

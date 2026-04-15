@@ -80,6 +80,7 @@ endif
 subdir('audio')
 subdir('unit')
 subdir('qapi-schema')
+subdir('inktest')
 subdir('gevico/qtest')
 subdir('qtest')
 subdir('migration-stress')

@@ -61,6 +61,7 @@
 #include "hw/uefi/var-service-api.h"
 #include "hw/gpio/g233_gpioctrl.h"
 #include "hw/pwmctrl/g233_pwmctrl.h"
+#include "hw/wdt/g233_wdt.h"
 #include "hw/spicontroller/spicontroller.h"
 
 /* KVM AIA only supports APLIC MSI. APLIC Wired is always emulated by QEMU. */
@@ -99,6 +100,7 @@ static const MemMapEntry virt_memmap[] = {
     [VIRT_UART0] =        { 0x10000000,         0x100 },
     [VIRT_VIRTIO] =       { 0x10001000,        0x1000 },
     [VIRT_FW_CFG] =       { 0x10100000,          0x18 },
+    [VIRT_WDT]  =          { 0x10010000,         0x1000 },
     [VIRT_SPICLTR]  =       { 0x10018000,         0x1000 }  , 
     [VIRT_PWMCTRL]  =       { 0x10015000,         0x1000 }  , 
     [VIRT_GPIOCTRL]  =       { 0x10012000,         0x1000 }  , 
@@ -131,6 +133,28 @@ static void g233_gpioctrl_create(RISCVG233State *s)
      */
     object_property_add_child(OBJECT(s), "gpioctrl", OBJECT(dev));
     s->gpioctrl = dev;
+}
+
+static void g233_wdt_create(RISCVG233State *s)
+{
+    DeviceState *dev = qdev_new(TYPE_G233_WDT);
+
+    /*
+     * Board-level ownership:
+     * - the machine decides the watchdog block exists
+     * - the device model owns the register contract and later timeout logic
+     */
+    object_property_add_child(OBJECT(s), "wdt", OBJECT(dev));
+    s->wdt = dev;
+}
+
+static void g233_wdt_realize(RISCVG233State *s, DeviceState *mmio_irqchip)
+{
+    SysBusDevice *sysbus = SYS_BUS_DEVICE(s->wdt);
+
+    sysbus_realize(sysbus, &error_fatal);
+    sysbus_mmio_map(sysbus, 0, s->memmap[VIRT_WDT].base);
+    sysbus_connect_irq(sysbus, 0, qdev_get_gpio_in(mmio_irqchip, WDT_IRQ));
 }
 
 static void g233_gpioctrl_realize(RISCVG233State *s, DeviceState *mmio_irqchip)
@@ -1119,6 +1143,33 @@ static void create_fdt_gpio(RISCVG233State *s,
     qemu_fdt_setprop_string(ms->fdt, "/aliases", "gpio0", name);
 }
 
+static void create_fdt_wdt(RISCVG233State *s,
+                           uint32_t irq_mmio_phandle,
+                           uint32_t *phandle)
+{
+    g_autofree char *name = NULL;
+    MachineState *ms = MACHINE(s);
+    uint32_t wdt_phandle = (*phandle)++;
+
+    name = g_strdup_printf("/soc/watchdog@%" HWADDR_PRIx,
+                           s->memmap[VIRT_WDT].base);
+    qemu_fdt_add_subnode(ms->fdt, name);
+    qemu_fdt_setprop_string(ms->fdt, name, "compatible", "gevico,g233-wdt");
+    qemu_fdt_setprop_sized_cells(ms->fdt, name, "reg",
+                                 2, s->memmap[VIRT_WDT].base,
+                                 2, s->memmap[VIRT_WDT].size);
+    qemu_fdt_setprop_cell(ms->fdt, name, "phandle", wdt_phandle);
+    qemu_fdt_setprop_cell(ms->fdt, name, "interrupt-parent",
+                          irq_mmio_phandle);
+    if (s->aia_type == G233_AIA_TYPE_NONE) {
+        qemu_fdt_setprop_cell(ms->fdt, name, "interrupts", WDT_IRQ);
+    } else {
+        qemu_fdt_setprop_cells(ms->fdt, name, "interrupts", WDT_IRQ, 0x4);
+    }
+
+    qemu_fdt_setprop_string(ms->fdt, "/aliases", "watchdog0", name);
+}
+
 static void create_fdt_pwm(RISCVG233State *s,
                            uint32_t irq_mmio_phandle,
                            uint32_t *phandle)
@@ -1347,6 +1398,7 @@ static void finalize_fdt(RISCVG233State *s)
 
     create_fdt_reset(s, &phandle);
 
+    create_fdt_wdt(s, irq_mmio_phandle, &phandle);
     create_fdt_gpio(s, irq_mmio_phandle, &phandle);
     create_fdt_pwm(s, irq_mmio_phandle, &phandle);
 
@@ -1911,6 +1963,14 @@ static void virt_machine_init(MachineState *machine)
         qdev_get_gpio_in(mmio_irqchip, RTC_IRQ));
 
     /*
+     * Watchdog timer:
+     * - MMIO lives on the system bus at 0x10010000
+     * - one aggregated IRQ is routed to PLIC source 4
+     * - timeout/reset semantics remain inside the device model TODOs
+     */
+    g233_wdt_realize(s, mmio_irqchip);
+
+    /*
      * GPIO controller:
      * - MMIO lives on the system bus at 0x10012000
      * - one aggregated IRQ is routed to PLIC source 2
@@ -1980,6 +2040,7 @@ static void virt_machine_instance_init(Object *obj)
     RISCVG233State *s = RISCV_G233_MACHINE(obj);
 
     virt_flash_create(s);
+    g233_wdt_create(s);
     g233_gpioctrl_create(s);
     g233_pwmctrl_create(s);
     g233_spi0_create(s);

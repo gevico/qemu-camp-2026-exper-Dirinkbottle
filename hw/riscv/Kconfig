@@ -141,6 +141,7 @@ config GEVICO_G233
     depends on RISCV32 || RISCV64
     select G233_GPIOCTRL
     select G233_PWMCTRL
+    select G233_WDT
     select RISCV_ACLINT
     select SIFIVE_PLIC
     select SIFIVE_GPIO

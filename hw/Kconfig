@@ -48,6 +48,7 @@ source virtio/Kconfig
 source vfio/Kconfig
 source vfio-user/Kconfig
 source vmapple/Kconfig
+source wdt/Kconfig
 source xen/Kconfig
 source watchdog/Kconfig
 
