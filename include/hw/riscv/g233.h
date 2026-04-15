@@ -54,6 +54,7 @@ struct RISCVG233State {
     DeviceState *irqchip[VIRT_SOCKETS_MAX];
     PFlashCFI01 *flash[2];
     DeviceState *gpioctrl;
+    DeviceState *pwmctrl;
     DeviceState *spi0;
     DeviceState *spi0_flash[2];
     FWCfgState *fw_cfg;
@@ -94,11 +95,13 @@ enum {
     VIRT_PCIE_ECAM,
     VIRT_IOMMU_SYS,
     VIRT_SPICLTR,
+    VIRT_PWMCTRL,
     VIRT_GPIOCTRL,
 };
 
 enum {
     GPIO_IRQ = 2,
+    PWM_IRQ = 3,
     /*
      * Educational qtests currently expect SPI0 to land on source 5.
      * This overlaps the borrowed virtio-mmio range from virt; keep it

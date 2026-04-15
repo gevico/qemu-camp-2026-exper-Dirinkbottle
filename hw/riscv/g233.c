@@ -60,6 +60,7 @@
 #include "hw/virtio/virtio-iommu.h"
 #include "hw/uefi/var-service-api.h"
 #include "hw/gpio/g233_gpioctrl.h"
+#include "hw/pwmctrl/g233_pwmctrl.h"
 #include "hw/spicontroller/spicontroller.h"
 
 /* KVM AIA only supports APLIC MSI. APLIC Wired is always emulated by QEMU. */
@@ -99,6 +100,7 @@ static const MemMapEntry virt_memmap[] = {
     [VIRT_VIRTIO] =       { 0x10001000,        0x1000 },
     [VIRT_FW_CFG] =       { 0x10100000,          0x18 },
     [VIRT_SPICLTR]  =       { 0x10018000,         0x1000 }  , 
+    [VIRT_PWMCTRL]  =       { 0x10015000,         0x1000 }  , 
     [VIRT_GPIOCTRL]  =       { 0x10012000,         0x1000 }  , 
     [VIRT_FLASH] =        { 0x20000000,     0x4000000 },
     [VIRT_IMSIC_M] =      { 0x24000000, VIRT_IMSIC_MAX_SIZE },
@@ -138,6 +140,32 @@ static void g233_gpioctrl_realize(RISCVG233State *s, DeviceState *mmio_irqchip)
     sysbus_realize(sysbus, &error_fatal);
     sysbus_mmio_map(sysbus, 0, s->memmap[VIRT_GPIOCTRL].base);
     sysbus_connect_irq(sysbus, 0, qdev_get_gpio_in(mmio_irqchip, GPIO_IRQ));
+}
+
+static void g233_pwmctrl_create(RISCVG233State *s)
+{
+    DeviceState *dev = qdev_new(TYPE_G233_PWMCTRL);
+
+    /*
+     * Keep PWM controller ownership at the board level:
+     * - machine decides the block exists at all
+     * - the device model owns the register semantics and internal timing
+     *
+     * The default 1MHz clock makes qtest stepping intuitive:
+     * 1 tick = 1 microsecond.
+     */
+    qdev_prop_set_uint64(dev, "clock-frequency", 1000000ULL);
+    object_property_add_child(OBJECT(s), "pwmctrl", OBJECT(dev));
+    s->pwmctrl = dev;
+}
+
+static void g233_pwmctrl_realize(RISCVG233State *s, DeviceState *mmio_irqchip)
+{
+    SysBusDevice *sysbus = SYS_BUS_DEVICE(s->pwmctrl);
+
+    sysbus_realize(sysbus, &error_fatal);
+    sysbus_mmio_map(sysbus, 0, s->memmap[VIRT_PWMCTRL].base);
+    sysbus_connect_irq(sysbus, 0, qdev_get_gpio_in(mmio_irqchip, PWM_IRQ));
 }
 
 /*create SPI controller */
@@ -1091,6 +1119,41 @@ static void create_fdt_gpio(RISCVG233State *s,
     qemu_fdt_setprop_string(ms->fdt, "/aliases", "gpio0", name);
 }
 
+static void create_fdt_pwm(RISCVG233State *s,
+                           uint32_t irq_mmio_phandle,
+                           uint32_t *phandle)
+{
+    g_autofree char *name = NULL;
+    MachineState *ms = MACHINE(s);
+    uint32_t pwm_phandle = (*phandle)++;
+
+    name = g_strdup_printf("/soc/pwm@%"HWADDR_PRIx,
+                           s->memmap[VIRT_PWMCTRL].base);
+    qemu_fdt_add_subnode(ms->fdt, name);
+    qemu_fdt_setprop_string(ms->fdt, name, "compatible",
+                            "gevico,g233-pwmctrl");
+    qemu_fdt_setprop_sized_cells(ms->fdt, name, "reg",
+                                 2, s->memmap[VIRT_PWMCTRL].base,
+                                 2, s->memmap[VIRT_PWMCTRL].size);
+    qemu_fdt_setprop_cell(ms->fdt, name, "phandle", pwm_phandle);
+    qemu_fdt_setprop(ms->fdt, name, "pwm-controller", NULL, 0);
+    qemu_fdt_setprop_cell(ms->fdt, name, "#pwm-cells", 3);
+    qemu_fdt_setprop_cell(ms->fdt, name, "clock-frequency", 1000000);
+    qemu_fdt_setprop_cell(ms->fdt, name, "interrupt-parent",
+                          irq_mmio_phandle);
+    if (s->aia_type == G233_AIA_TYPE_NONE) {
+        qemu_fdt_setprop_cell(ms->fdt, name, "interrupts", PWM_IRQ);
+    } else {
+        qemu_fdt_setprop_cells(ms->fdt, name, "interrupts", PWM_IRQ, 0x4);
+    }
+
+    /*
+     * This node currently describes the controller as a provider only.
+     * Board-level pin mux routing and concrete consumers can be added later.
+     */
+    qemu_fdt_setprop_string(ms->fdt, "/aliases", "pwm0", name);
+}
+
 static void create_fdt_uart(RISCVG233State *s,
                             uint32_t irq_mmio_phandle)
 {
@@ -1285,6 +1348,7 @@ static void finalize_fdt(RISCVG233State *s)
     create_fdt_reset(s, &phandle);
 
     create_fdt_gpio(s, irq_mmio_phandle, &phandle);
+    create_fdt_pwm(s, irq_mmio_phandle, &phandle);
 
     create_fdt_uart(s, irq_mmio_phandle);
 
@@ -1856,6 +1920,15 @@ static void virt_machine_init(MachineState *machine)
     g233_gpioctrl_realize(s, mmio_irqchip);
 
     /*
+     * PWM controller:
+     * - MMIO lives on the system bus at 0x10015000
+     * - one aggregated IRQ is routed to PLIC source 3
+     * - four pwm_out wires exist at the device boundary, but are not yet
+     *   connected to pinctrl/pads or concrete board consumers
+     */
+    g233_pwmctrl_realize(s, mmio_irqchip);
+
+    /*
      * SPI controller:
      * - MMIO lives on the system bus at 0x10018000
      * - IRQ is routed into the board interrupt controller/PLIC input
@@ -1908,6 +1981,7 @@ static void virt_machine_instance_init(Object *obj)
 
     virt_flash_create(s);
     g233_gpioctrl_create(s);
+    g233_pwmctrl_create(s);
     g233_spi0_create(s);
     g233_spi0_flash_create(s);
 
