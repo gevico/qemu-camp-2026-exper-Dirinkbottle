@@ -25,10 +25,33 @@
 /* TODO: Implement MMIO control register read */
 static uint64_t gpgpu_ctrl_read(void *opaque, hwaddr addr, unsigned size)
 {
-    (void)opaque;
-    (void)addr;
-    (void)size;
-    return 0;
+    /* PCI_COMMAND: IO | MEMORY | MASTER is enabled? */
+
+
+    /* this addr should be in window */
+
+    /* GPGPU_DEV_ID_VALUE          0x47505055    */
+
+    uint32_t value = 0;
+ 
+    switch (addr)
+    {
+    case GPGPU_REG_DEV_ID:
+        value = GPGPU_DEV_ID_VALUE;
+        break;
+    case GPGPU_REG_DEV_VERSION:
+        value = GPGPU_DEV_VERSION_VALUE;
+        /* code */
+        break;
+    case GPGPU_REG_DEV_CAPS:
+        /* code */
+        break;
+    default:
+        break;
+    }
+
+    
+    return value;
 }
 
 /* TODO: Implement MMIO control register write */
@@ -54,9 +77,11 @@ static const MemoryRegionOps gpgpu_ctrl_ops = {
 /* TODO: Implement VRAM read */
 static uint64_t gpgpu_vram_read(void *opaque, hwaddr addr, unsigned size)
 {
-    (void)opaque;
-    (void)addr;
-    (void)size;
+    
+       
+
+
+
     return 0;
 }
 
@@ -82,19 +107,21 @@ static const MemoryRegionOps gpgpu_vram_ops = {
 
 static uint64_t gpgpu_doorbell_read(void *opaque, hwaddr addr, unsigned size)
 {
-    (void)opaque;
-    (void)addr;
-    (void)size;
     return 0;
 }
 
 static void gpgpu_doorbell_write(void *opaque, hwaddr addr, uint64_t val,
                                  unsigned size)
 {
-    (void)opaque;
-    (void)addr;
-    (void)val;
-    (void)size;
+    
+    // #define GPGPU_CTRL_BAR_SIZE     (1 * 1024 * 1024)   /* BAR0: 控制寄存器 1MB */
+    // #define GPGPU_VRAM_BAR_SIZE     (64 * 1024 * 1024)  /* BAR2: 显存 64MB (默认) */
+    // #define GPGPU_DOORBELL_BAR_SIZE (64 * 1024)         /* BAR4: 门铃寄存器 64KB */
+
+   
+    return;
+
+    
 }
 
 static const MemoryRegionOps gpgpu_doorbell_ops = {
