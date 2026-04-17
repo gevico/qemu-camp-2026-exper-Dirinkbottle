@@ -107,6 +107,8 @@ typedef struct GPGPUWarp {
 #define GPGPU_CORE_CTRL_GRID_DIM_X  (GPGPU_CORE_CTRL_BASE + 0x30)
 #define GPGPU_CORE_CTRL_GRID_DIM_Y  (GPGPU_CORE_CTRL_BASE + 0x34)
 #define GPGPU_CORE_CTRL_GRID_DIM_Z  (GPGPU_CORE_CTRL_BASE + 0x38)
+#define GPGPU_CORE_BARRIER          (GPGPU_CORE_CTRL_BASE + 0x2000)
+#define GPGPU_CORE_THREAD_MASK      (GPGPU_CORE_CTRL_BASE + 0x2004)
 
 /*
  * ============================================================================
