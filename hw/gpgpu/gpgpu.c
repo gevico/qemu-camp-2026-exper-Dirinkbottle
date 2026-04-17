@@ -251,6 +251,11 @@ static void gpgpu_ctrl_write(void *opaque, hwaddr addr, uint64_t val,
         s->kernel.shared_mem_size = value;
         break;
     case GPGPU_REG_DISPATCH:
+        if (s->global_status & GPGPU_STATUS_BUSY) {
+            s->error_status |= GPGPU_ERR_INVALID_CMD;
+            return;
+        }
+        
         s->global_status = GPGPU_STATUS_BUSY;
         if (gpgpu_core_exec_kernel(s) == 0) {
             s->global_status = GPGPU_STATUS_READY;
@@ -327,25 +332,48 @@ static const MemoryRegionOps gpgpu_ctrl_ops = {
     },
 };
 
-/* TODO: Implement VRAM read */
 static uint64_t gpgpu_vram_read(void *opaque, hwaddr addr, unsigned size)
 {
-    
-       
+    GPGPUState *s = opaque;
+    uint64_t value = 0;
 
+    if (!s->vram_ptr || size == 0 || addr + size > s->vram_size) {
+        s->global_status |= GPGPU_STATUS_ERROR;
+        s->error_status |= GPGPU_ERR_VRAM_FAULT;
+        s->irq_status |= GPGPU_IRQ_ERROR;
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "gpgpu: vram read out of range addr=0x%" HWADDR_PRIx
+                      " size=%u vram_size=0x%" PRIx64 "\n",
+                      addr, size, s->vram_size);
+        return 0;
+    }
 
+    for (unsigned i = 0; i < size; i++) {
+        value |= ((uint64_t)s->vram_ptr[addr + i]) << (i * 8);
+    }
 
-    return 0;
+    return value;
 }
 
-/* TODO: Implement VRAM write */
 static void gpgpu_vram_write(void *opaque, hwaddr addr, uint64_t val,
                              unsigned size)
 {
-    (void)opaque;
-    (void)addr;
-    (void)val;
-    (void)size;
+    GPGPUState *s = opaque;
+
+    if (!s->vram_ptr || size == 0 || addr + size > s->vram_size) {
+        s->global_status |= GPGPU_STATUS_ERROR;
+        s->error_status |= GPGPU_ERR_VRAM_FAULT;
+        s->irq_status |= GPGPU_IRQ_ERROR;
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "gpgpu: vram write out of range addr=0x%" HWADDR_PRIx
+                      " size=%u vram_size=0x%" PRIx64 "\n",
+                      addr, size, s->vram_size);
+        return;
+    }
+
+    for (unsigned i = 0; i < size; i++) {
+        s->vram_ptr[addr + i] = (uint8_t)(val >> (i * 8));
+    }
 }
 
 static const MemoryRegionOps gpgpu_vram_ops = {
